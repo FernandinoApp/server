@@ -1,5 +1,5 @@
 const adminModel = require("../models/adminModel");
-const bcrypt = require("bcrypt");
+const bcrypt = require("bcryptjs");
 
 // Create and register a new admin
 exports.registerAdminController = async (req, res) => {
