@@ -13,7 +13,6 @@
   "author": "group7",
   "license": "ISC",
   "dependencies": {
-    "bcrypt": "^5.1.1",
     "bcryptjs": "^2.4.3",
     "cloudinary": "^2.1.0",
     "colors": "^1.4.0",
