@@ -45,7 +45,7 @@ const userSchema = new mongoose.Schema(
       required: [true, "please add mobile number"],
       trim: true,
       minlength: [11, "Mobile number must be 11 digits"],
-      maxlength: [11, "Mobile number must be 11 digits"],    
+      maxlength: [11, "Mobile number must be 11 digits"],
     },
     email: {
       type: String,
@@ -63,6 +63,10 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: [true, "please add valid id"],
     },
+    certification: {
+      type: String,
+      required: [true, "please agree to the terms and conditions"],
+    },
     imageclearance: {
       type: String,
     },
@@ -79,6 +83,14 @@ const userSchema = new mongoose.Schema(
     },
     resetPasswordExpires: {
       type: Date,
+    },
+    accepted: {
+      type: Boolean,
+      default: false,
+    },
+    rejected: {
+      type: Boolean,
+      default: false,
     },
   },
   { timestamps: true }

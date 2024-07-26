@@ -2,9 +2,15 @@ const JWT = require("jsonwebtoken");
 const { hashPassword, comparePassword } = require("../helpers/authHelper");
 const { createCustomID } = require("../helpers/idHelper");
 const userModel = require("../models/userModel");
-const crypto = require('crypto');
-const nodemailer = require('nodemailer');
+const cloudinary = require("../utils/cloudinary");
+const multer = require("multer");
+const crypto = require("crypto");
+const nodemailer = require("nodemailer");
 var { expressjwt: jwt } = require("express-jwt");
+
+// multer setup for file upload
+const storage = multer.memoryStorage();
+const upload = multer({ storage });
 
 // middleware
 const requireSignIn = jwt({
@@ -12,75 +18,29 @@ const requireSignIn = jwt({
   algorithms: ["HS256"],
 });
 
+// helper function to upload images to cloudinary
+const uploadImageToCloudinary = (buffer, folder) => {
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      { folder: folder, resource_type: "image" },
+      (error, result) => {
+        if (error) return reject(error);
+        resolve(result);
+      }
+    );
+    uploadStream.end(buffer);
+  });
+};
+
 // register
 const registerController = async (req, res) => {
   try {
-    const { lastname, firstname, middlename, suffix, houseno, barangay, birthday, gender, number, email, password, imageid, imageclearance } = req.body;
+    const { lastname, firstname, middlename, suffix, houseno, barangay, birthday, gender, number, email, password, certification } = req.body;
     // validation
-    if (!lastname) {
+    if (!lastname || !firstname || !middlename || !houseno || !barangay || !birthday || !gender || !number || !email || !password || !certification) {
       return res.status(400).send({
         success: false,
-        message: "last name is required",
-      });
-    }
-    if (!firstname) {
-      return res.status(400).send({
-        success: false,
-        message: "first name is required",
-      });
-    }
-    if (!middlename) {
-      return res.status(400).send({
-        success: false,
-        message: "middle name is required",
-      });
-    }
-    if (!houseno) {
-      return res.status(400).send({
-        success: false,
-        message: "house number is required",
-      });
-    }
-    if (!barangay) {
-      return res.status(400).send({
-        success: false,
-        message: "barangay is required",
-      });
-    }
-    if (!birthday) {
-      return res.status(400).send({
-        success: false,
-        message: "birthday is required",
-      });
-    }
-    if (!gender) {
-      return res.status(400).send({
-        success: false,
-        message: "gender is required",
-      });
-    }
-    if (!number) {
-      return res.status(400).send({
-        success: false,
-        message: "mobile number is required",
-      });
-    }
-    if (!email) {
-      return res.status(400).send({
-        success: false,
-        message: "email is required",
-      });
-    }
-    if (!password || password.length < 6) {
-      return res.status(400).send({
-        success: false,
-        message: "password is required and 6 characters long",
-      });
-    }
-    if (!imageid) {
-      return res.status(400).send({
-        success: false,
-        message: "image is required",
+        message: "Please Provide All Fields",
       });
     }
 
@@ -99,6 +59,36 @@ const registerController = async (req, res) => {
     // generate custom user ID
     const userId = await createCustomID();
 
+    // upload images to cloudinary
+    let imageidUrl = null;
+    let imageclearanceUrl = null;
+
+    if (req.files.imageid) {
+      try {
+        const result = await uploadImageToCloudinary(req.files.imageid[0].buffer, "user_id_images");
+        imageidUrl = result.secure_url;
+      } catch (error) {
+        console.error("Error uploading image ID to Cloudinary:", error);
+        return res.status(500).send({
+          success: false,
+          message: "Error uploading image ID",
+        });
+      }
+    }
+
+    if (req.files.imageclearance) {
+      try {
+        const result = await uploadImageToCloudinary(req.files.imageclearance[0].buffer, "user_clearance_images");
+        imageclearanceUrl = result.secure_url;
+      } catch (error) {
+        console.error("Error uploading image clearance to Cloudinary:", error);
+        return res.status(500).send({
+          success: false,
+          message: "Error uploading image clearance",
+        });
+      }
+    }
+
     // save user
     const user = await new userModel({
       userId,
@@ -113,9 +103,14 @@ const registerController = async (req, res) => {
       number,
       email,
       password: hashedPassword,
-      imageid,
-      imageclearance,
+      imageid: imageidUrl,
+      imageclearance: imageclearanceUrl,
+      certification,
     }).save();
+
+    // Emit new user event
+    const io = req.app.get("io");
+    io.emit("new-user", user);
 
     return res.status(201).send({
       success: true,
@@ -181,7 +176,6 @@ const loginController = async (req, res) => {
     });
   }
 };
-
 // forgot password
 const forgotPasswordController = async (req, res) => {
   const { email } = req.body;
@@ -296,12 +290,12 @@ const updatePasswordController = async (req, res) => {
   } catch (error) {
     console.log(error);
     res.status(500).send({
-    success: false,
-    message: "Error in updating password",
-    error,
+      success: false,
+      message: "Error in updating password",
+      error,
     });
-    }
-    };
+  }
+};
 
 // update user
 const updateUserController = async (req, res) => {
@@ -345,7 +339,7 @@ const updateUserController = async (req, res) => {
 // In userController.js
 const getAllUsersController = async (req, res) => {
   try {
-    const users = await userModel.find();
+    const users = await userModel.find({}, 'userId lastname middlename firstname houseno number barangay birthday gender email imageid imageclearance accepted rejected');
     res.status(200).send({
       success: true,
       users,
@@ -360,13 +354,90 @@ const getAllUsersController = async (req, res) => {
   }
 };
 
-module.exports = { 
-  requireSignIn, 
-  registerController, 
+// delete user
+const deleteUserController = async (req, res) => {
+  try {
+    const { id } = req.params;
+    await userModel.findByIdAndDelete(id);
+    res.status(200).send({
+      success: true,
+      message: "User deleted successfully",
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).send({
+      success: false,
+      message: "Error in deleting user",
+      error,
+    });
+  }
+};
+
+const acceptUserController = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = await userModel.findById(id);
+    if (!user) {
+      return res.status(404).send({
+        success: false,
+        message: 'User not found',
+      });
+    }
+    user.accepted = true;
+    await user.save();
+    res.status(200).send({
+      success: true,
+      message: 'User accepted successfully',
+      user,
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).send({
+      success: false,
+      message: 'Error in accepting user',
+      error,
+    });
+  }
+};
+
+const rejectUserController = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = await userModel.findById(id);
+    if (!user) {
+      return res.status(404).send({
+        success: false,
+        message: 'User not found',
+      });
+    }
+    user.rejected = true;
+    await user.save();
+    res.status(200).send({
+      success: true,
+      message: 'User rejected successfully',
+      user,
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).send({
+      success: false,
+      message: 'Error in rejecting user',
+      error,
+    });
+  }
+};
+
+module.exports = {
+  requireSignIn,
+  registerController,
   loginController,
   forgotPasswordController,
-  resetPasswordController, 
+  resetPasswordController,
   updateUserController,
   updatePasswordController,
-  getAllUsersController
+  getAllUsersController,
+  deleteUserController,
+  acceptUserController,
+  rejectUserController,
+  upload,
 };

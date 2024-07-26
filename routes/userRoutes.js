@@ -7,29 +7,31 @@ const {
   forgotPasswordController,
   resetPasswordController,
   updatePasswordController,
+  getAllUsersController,
+  deleteUserController,
+  acceptUserController,
+  rejectUserController,
+  upload
 } = require("../controllers/userController");
 
-// router object
 const router = express.Router();
 
-// routes
-// REGISTER || POST
-router.post("/register", registerController);
+router.post("/register", upload.fields([{ name: 'imageid' }, { name: 'imageclearance' }]), registerController);
 
-// LOGIN || POST
 router.post("/login", loginController);
 
-// FORGOT PASSWORD || POST
 router.post("/forgot-password", forgotPasswordController);
 
-// RESET PASSWORD || POST
 router.post("/reset-password", resetPasswordController);
 
-// update password
 router.post("/update-password", requireSignIn, updatePasswordController);
 
-// UPDATE || PUT
 router.put("/update-user", requireSignIn, updateUserController);
 
-// export
+router.get("/get-all-users", getAllUsersController);
+
+router.put("/accept-user/:id", acceptUserController);
+
+router.put("/reject-user/:id", rejectUserController);
+
 module.exports = router;

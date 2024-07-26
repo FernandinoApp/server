@@ -6,7 +6,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node server.js",
-    "server": "nodemon server.js",
+    "server": "node server.js",
     "admin": "npm start --prefix ../admin",
     "dev": "concurrently \"npm run server\" \"npm run admin\""
   },
@@ -33,6 +33,7 @@
     "nodemailer": "^6.9.14",
     "parser": "^0.1.4",
     "qrcode": "^1.5.3",
+    "socket.io": "^4.7.5",
     "stripe": "^15.1.0"
   }
 }
